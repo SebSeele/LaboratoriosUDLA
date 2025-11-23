@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>UDLA Reservas Cloud</title>
+    <style>
+        /* Estilo simple y limpio tipo UDLA */
+        body { font-family: 'Segoe UI', sans-serif; background: #f8f9fa; color: #333; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h2 { color: #c8102e; text-align: center; margin-bottom: 1.5rem; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 10px; transition: 0.3s; }
+        .btn-primary { background: #c8102e; color: white; }
+        .btn-primary:hover { background: #a00c24; }
+        .btn-danger { background: #333; color: white; }
+        input, select { width: 100%; padding: 10px; margin: 5px 0 15px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        .hidden { display: none; }
+        #status { text-align: center; margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div style="text-align:center;">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/6/68/Logotipo_UDLA.png" width="100" alt="Logo">
+    </div>
+    <h2>Reservas Cloud</h2>
+
+    <div id="loginSection">
+        <p style="text-align:center;">Ingresa con tus credenciales institucionales</p>
+        <button class="btn btn-primary" onclick="login()">Iniciar Sesión</button>
+    </div>
+
+    <div id="appSection" class="hidden">
+        <p>Hola, <b id="userEmail">Usuario</b></p>
+        <div id="adminBadge" class="hidden" style="background:#ffd700; color:#000; padding:2px 5px; font-size:12px; border-radius:3px; display:inline-block; margin-bottom:10px;">ADMINISTRADOR</div>
+        
+        <label>Laboratorio / Sala</label>
+        <select id="salaId">
+            <option value="LAB_CIBER_1">Lab Ciberseguridad 1</option>
+            <option value="LAB_REDES_2">Lab Redes 2</option>
+            <option value="AUDITORIO">Auditorio Principal</option>
+        </select>
+
+        <label>Fecha y Hora (Formato ID)</label>
+        <input type="text" id="fechaHora" placeholder="2025-11-25-0900">
+
+        <button class="btn btn-primary" onclick="enviar('POST')">Reservar</button>
+        
+        <div id="adminControls" class="hidden">
+            <hr>
+            <label style="color:red; font-size:12px;">ZONA ADMINISTRATIVA</label>
+            <button class="btn btn-danger" onclick="enviar('DELETE')">Eliminar Reserva</button>
+        </div>
+        
+        <p id="status"></p>
+        <a href="#" onclick="logout()" style="display:block; text-align:center; margin-top:20px; color:#666;">Cerrar Sesión</a>
+    </div>
+</div>
+
+<script>
+    // --- ⚠️ REEMPLAZA ESTOS DATOS ⚠️ ---
+    
+    // 1. Tu URL de API Gateway (Termina en /prod/reservar)
+    const API_URL = 'https://XXXXXXXX.execute-api.us-east-1.amazonaws.com/prod/reservar';
+    
+    // 2. Dominio de Cognito (Sin el /login al final)
+    const COGNITO_DOMAIN = 'https://tudominio.auth.us-east-1.amazoncognito.com';
+    
+    // 3. Client ID de Cognito (App integration > App client list)
+    const CLIENT_ID = 'xxxxxxxxxxxxxxxxxxxxxx';
+    
+    // 4. URL de este sitio S3 (tal cual la pusiste en Cognito Callback URL)
+    const REDIRECT_URI = 'http://tu-bucket.s3-website-us-east-1.amazonaws.com';
+
+    // ------------------------------------
+
+    let idToken = null;
+
+    window.onload = () => {
+        // Verificar si volvimos del login con el token en la URL
+        const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+        idToken = urlParams.get('id_token');
+
+        if (idToken) {
+            mostrarApp(idToken);
+            // Limpiar URL para que se vea bonita
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    };
+
+    function login() {
+        // Redirigir a la UI de Cognito
+        window.location.href = `${COGNITO_DOMAIN}/login?client_id=${CLIENT_ID}&response_type=token&scope=email+openid&redirect_uri=${REDIRECT_URI}`;
+    }
+
+    function logout() {
+        window.location.href = `${COGNITO_DOMAIN}/logout?client_id=${CLIENT_ID}&logout_uri=${REDIRECT_URI}`;
+    }
+
+    function mostrarApp(token) {
+        document.getElementById('loginSection').classList.add('hidden');
+        document.getElementById('appSection').classList.remove('hidden');
+
+        // Decodificar JWT para sacar info básica (sin validar firma, solo visual)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        document.getElementById('userEmail').innerText = payload.email;
+
+        // Verificar grupo admin
+        if(payload['cognito:groups'] && payload['cognito:groups'].includes('Administradores')){
+            document.getElementById('adminBadge').classList.remove('hidden');
+            document.getElementById('adminControls').classList.remove('hidden');
+        }
+    }
+
+    async function enviar(metodo) {
+        const sala = document.getElementById('salaId').value;
+        const fecha = document.getElementById('fechaHora').value;
+        const status = document.getElementById('status');
+
+        status.innerText = "Procesando...";
+        status.style.color = "blue";
+
+        try {
+            const res = await fetch(API_URL, {
+                method: metodo,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': idToken // El token es la llave
+                },
+                body: JSON.stringify({ sala_id: sala, fecha_hora: fecha })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                status.innerText = data.mensaje || "Éxito";
+                status.style.color = "green";
+            } else {
+                status.innerText = data.error || "Error desconocido";
+                status.style.color = "red";
+            }
+        } catch (e) {
+            status.innerText = "Error de conexión";
+            status.style.color = "red";
+        }
+    }
+</script>
+</body>
+</html>
