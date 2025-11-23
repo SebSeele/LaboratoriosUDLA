@@ -309,21 +309,15 @@ HTML
 
 <script>
     // --- ⚠️ REEMPLAZA ESTOS DATOS ⚠️ ---
-    
     // 1. Tu URL de API Gateway (Termina en /prod/reservar)
     const API_URL = 'https://XXXXXXXX.execute-api.us-east-1.amazonaws.com/prod/reservar';
-    
     // 2. Dominio de Cognito (Sin el /login al final)
     const COGNITO_DOMAIN = 'https://tudominio.auth.us-east-1.amazoncognito.com';
-    
     // 3. Client ID de Cognito (App integration > App client list)
     const CLIENT_ID = 'xxxxxxxxxxxxxxxxxxxxxx';
-    
     // 4. URL de este sitio S3 (tal cual la pusiste en Cognito Callback URL)
     const REDIRECT_URI = 'http://tu-bucket.s3-website-us-east-1.amazonaws.com';
-
-    // ------------------------------------
-
+    
     let idToken = null;
 
     window.onload = () => {
